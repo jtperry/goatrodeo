@@ -7,7 +7,6 @@ import goatrodeo.util.ArtifactWrapper
 import goatrodeo.util.FileWalker
 import goatrodeo.util.FileWrapper
 import goatrodeo.util.GitOID
-import goatrodeo.util.Helpers
 
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -15,6 +14,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.immutable.TreeMap
 import scala.collection.immutable.TreeSet
+import goatrodeo.util.WorkQueue
+import goatrodeo.util.Helpers
 
 /** When processing Artifacts, knowing the Artifact type for a sequence of
   * artifacts can be helpful. For example (Java POM File, Java Sources,
@@ -365,7 +366,7 @@ trait ToProcess {
 
                       val processSet =
                         ToProcess.strategiesForArtifacts(
-                          foundItems,
+                          WorkQueue.from(foundItems),
                           x => (),
                           false
                         )
@@ -409,7 +410,7 @@ object ToProcess {
   type ByName = Map[String, Vector[ArtifactWrapper]]
 
   val computeToProcess: Vector[
-    (ByUUID, ByName) => (Vector[ToProcess], ByUUID, ByName, String)
+    (ByUUID, ByName, Boolean) => (Vector[ToProcess], ByUUID, ByName, String)
   ] =
     Vector(
       MavenToProcess.computeMavenFiles,
@@ -434,18 +435,63 @@ object ToProcess {
       tempDir: Option[File],
       onFound: ToProcess => Unit = _ => ()
   ): Vector[ToProcess] = {
-    val wrappers = Helpers
-      .findFiles(directory, _ => true)
-      .map(f => FileWrapper(f, f.getName(), tempDir))
+    val queue = WorkQueue[File]()
+    Helpers
+      .findFiles(directory, queue);
+    queue.close()
 
-    strategiesForArtifacts(wrappers, onFound = onFound, infoMsgs_?)
+    strategiesForArtifacts(
+      queue.into(f => FileWrapper(f, f.getName(), tempDir)),
+      onFound = onFound,
+      infoMsgs_?
+    )
   }
 
   def strategiesForArtifacts(
-      artifacts: Vector[ArtifactWrapper],
+      artifacts: WorkQueue[ArtifactWrapper],
       onFound: ToProcess => Unit,
       infoMsgs_? : Boolean
   ): Vector[ToProcess] = {
+    var ret: Vector[ToProcess] = Vector.empty
+    var byUUID: ByUUID = Map()
+    var byName: ByName = Map()
+    var loopCnt = 0
+    while (!artifacts.closed()) {
+      val batch = artifacts.getBatch()
+      val (collection, bn, bu) = internalStrategiesForArtifacts(
+        byName,
+        byUUID,
+        false,
+        batch,
+        onFound = onFound,
+        infoMsgs_? = false
+      )
+      byName = bn
+      byUUID = bu
+      ret = ret ++ collection
+      loopCnt += 1
+    }
+    val (collection, bn, bu) = internalStrategiesForArtifacts(
+      byName,
+      byUUID,
+      true,
+      Vector.empty,
+      onFound = onFound,
+      infoMsgs_? = infoMsgs_? && true
+    )
+
+    ret = ret ++ collection
+    ret
+  }
+
+  private def internalStrategiesForArtifacts(
+      inByName: ByName,
+      inByUUID: ByUUID,
+      eager: Boolean,
+      artifacts: Vector[ArtifactWrapper],
+      onFound: ToProcess => Unit,
+      infoMsgs_? : Boolean
+  ): (Vector[ToProcess], ByName, ByUUID) = {
 
     val totalCnt = artifacts.length
     val by50 = (totalCnt / 50) match {
@@ -454,23 +500,26 @@ object ToProcess {
     }
     if (infoMsgs_?) logger.info("Creating strategies for artifacts")
     // create the list of the files
-    val byUUID: ByUUID = Map(artifacts.zipWithIndex.map { case (f, idx) =>
-      f.mimeType
-      if (idx % by50 == 0 && infoMsgs_?) {
-        logger.info(f"Initial file setup ${idx} of ${totalCnt}")
-      }
-      f.uuid -> f
-    }*)
+    val byUUID: ByUUID =
+      inByUUID ++ Map(artifacts.zipWithIndex.map { case (f, idx) =>
+        f.mimeType
+        if (idx % by50 == 0 && infoMsgs_?) {
+          logger.info(f"Initial file setup ${idx} of ${totalCnt}")
+        }
+        f.uuid -> f
+      }*)
 
     if (infoMsgs_?) logger.info("Built UUID map")
     // and by name for lookup
-    val byName: ByName =
-      artifacts.foldLeft(Map()) { case (map, wrapper) =>
-        val v = map.get(wrapper.filenameWithNoPath) match {
-          case None    => Vector()
-          case Some(v) => v
-        }
-        map + (wrapper.filenameWithNoPath -> (v :+ wrapper))
+    val byName: ByName = inByName ++
+      artifacts.foldLeft(Map[String, Vector[ArtifactWrapper]]()) {
+        case (map, wrapper) =>
+          val v: Vector[ArtifactWrapper] =
+            map.get(wrapper.filenameWithNoPath) match {
+              case None    => Vector()
+              case Some(v) => v
+            }
+          map + (wrapper.filenameWithNoPath -> (v :+ wrapper))
       }
 
     if (infoMsgs_?)
@@ -482,7 +531,7 @@ object ToProcess {
       ) { case ((workingSet, workingByUUID, workingByName), (theFn, cnt)) =>
         if (infoMsgs_?) logger.info(f"Processing step ${cnt + 1}")
         val (addlToProcess, revisedByUUID, revisedByName, name) =
-          theFn(workingByUUID, workingByName)
+          theFn(workingByUUID, workingByName, eager)
         if (infoMsgs_?)
           logger.info(
             f"Finished processing step ${cnt + 1} for ${name} found ${addlToProcess.length}"
@@ -498,12 +547,13 @@ object ToProcess {
         )
       }
 
-    processSet
+    (processSet, finalByName, finalByUUID)
 
   }
+  import goatrodeo.util.WorkQueue
 
   def buildQueueOnSeparateThread(
-      fileListers: Seq[() => Seq[File]],
+      fileListers: Seq[WorkQueue[File] => Unit],
       ignorePathList: Set[String],
       excludeFileRegex: Seq[java.util.regex.Pattern],
       finishedFile: File => Unit,
@@ -513,49 +563,80 @@ object ToProcess {
   ): (ConcurrentLinkedQueue[ToProcess], AtomicBoolean) = {
     val stillWorking = AtomicBoolean(true)
     val queue = ConcurrentLinkedQueue[ToProcess]()
+
+    logger.info("in build queue")
     val buildIt: Runnable = () => {
       try {
-        import scala.collection.parallel.CollectionConverters.ImmutableSeqIsParallelizable
-        // get all the files
-        val allFiles: Vector[ArtifactWrapper] =
-          fileListers
-            .flatMap(fl => fl())
-            .par
-            // canonicalize path
-            .map(f => f.getCanonicalFile())
-            .filter(f => f.exists() && f.isFile())
-            // remove those in ignore list
-            .filter(f => !ignorePathList.contains(f.getPath()))
-            // filter based on regex
-            .filter(f => {
-              val name = f.getName()
-              excludeFileRegex.find(p => p.matcher(name).find()).isEmpty
-            })
-            .toSet // remove duplicates
-            .map(f => FileWrapper(f, f.getName(), tempDir, finishedFile))
-            .toVector
+        logger.info("In Find File Thread")
+        val mimedQueue = WorkQueue[ArtifactWrapper]()
+        {
+          // get all the files
+          val fileQueue = WorkQueue[File]()
 
-        logger.info(f"Found all files, count ${allFiles.length}")
+          val listFileThread = new Thread(() => {
+            logger.info("In find file thread")
+            for (fl <- fileListers) {
+              fl(fileQueue)
+            }
+            logger.info("Closing file queue")
+            fileQueue.close()
+          })
 
-        val mimeCnt = AtomicInteger(0)
-        allFiles.par.foreach(file => {
-          val cnt = mimeCnt.addAndGet(1)
-          if (cnt % 10000 == 0) {
-            logger.info(f"Mime builder count ${cnt}")
-          }
-          file.mimeType
-        })
+          listFileThread.start()
 
-        logger.info("Computed mime type for all files")
+          val mimeArtifactThread = new Thread(() => {
+            var known: Set[File] = Set()
+            var count = 0
+            while (!fileQueue.closed()) {
+              val batch = fileQueue.getBatch()
+              var parentDir: Option[String] = None
+              var curBatch: Vector[ArtifactWrapper] = Vector.empty
+              for {
+                f <- batch
+                canonicalized <- Some(f.getCanonicalFile())
+                if canonicalized.exists() && canonicalized
+                  .isFile() && !ignorePathList.contains(
+                  canonicalized.getPath()
+                ) && excludeFileRegex
+                  .find(p => p.matcher(canonicalized.getName()).find())
+                  .isEmpty && !known.contains(canonicalized)
 
+              } {
+                count += 1
+                val fw = FileWrapper(
+                  canonicalized,
+                  canonicalized.getName(),
+                  tempDir,
+                  finishedFile
+                )
+                known = known + canonicalized
+                fw.mimeType
+                val parent = canonicalized.getParentFile().getPath()
+                mimedQueue.addItem(fw)
+
+                if (count % 10000 == 0) {
+                  logger.info(f"Mimed file count ${count}")
+                }
+              }
+            }
+
+            mimedQueue.close()
+            logger.info(f"Found and computed mime type for ${count} files")
+
+          })
+
+          mimeArtifactThread.start()
+        }
+
+        logger.info("Building strategies")
         strategiesForArtifacts(
-          allFiles,
+          mimedQueue,
           toProcess => {
             queue.add(toProcess)
             val total = count.addAndGet(toProcess.itemCnt)
             if (total % 1000 == 0) {
               logger.info(
-                f"built strategies to handle ${total} of ${allFiles.length}"
+                f"built strategies to handle ${total}"
               )
             }
           },
@@ -632,7 +713,8 @@ object ToProcess {
   ): Storage = {
 
     // generate the strategy
-    val toProcess = strategiesForArtifacts(Vector(artifact), _ => (), false)
+    val toProcess =
+      strategiesForArtifacts(WorkQueue.from(Vector(artifact)), _ => (), false)
 
     buildGraphForToProcess(toProcess, store, purlOut, block)
 

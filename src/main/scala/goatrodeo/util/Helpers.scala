@@ -237,23 +237,22 @@ object Helpers {
     *
     * @param root
     *   the root directory to search
-    * @param ok
-    *   the filter function
+    *
     * @return
     *   the found files
     */
   def findFiles(
       root: File,
-      ok: File => Boolean
-  ): Vector[File] = {
+      queue: WorkQueue[File]
+  ): Unit = {
 
     if (root.isDirectory()) {
       Option(root.listFiles()).toVector
         .flatMap(_.toVector)
-        .flatMap(findFiles(_, ok))
-    } else if (root.isFile() && ok(root) && !root.getName().startsWith(".")) {
-      Vector(root)
-    } else Vector()
+        .foreach(findFiles(_, queue))
+    } else if (root.isFile() && !root.getName().startsWith(".")) {
+      queue.addItem(root)
+    }
   }
 
   /** Write data over a file

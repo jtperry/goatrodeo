@@ -32,6 +32,7 @@ import scala.annotation.tailrec
 import scala.collection.immutable.TreeSet
 import scala.collection.parallel.CollectionConverters.VectorIsParallelizable
 import scala.util.Try
+import goatrodeo.util.WorkQueue
 
 /** Build the GitOIDs the container and all the sub-elements found in the
   * container
@@ -69,7 +70,7 @@ object Builder {
       blockList: Option[File],
       maxRecords: Int,
       tempDir: Option[File],
-      fileListers: Seq[() => Seq[File]],
+      fileListers: Seq[WorkQueue[File] => Unit],
       ignorePathSet: Set[String],
       excludeFileRegex: Seq[java.util.regex.Pattern],
       finishedFile: File => Unit,
@@ -80,6 +81,7 @@ object Builder {
     val runningCnt = AtomicInteger(0)
     val dead_? = AtomicBoolean(false)
     var queueBuildingDone = false
+    logger.info("About to call build queue")
     val (queue, stillWorking) =
       ToProcess.buildQueueOnSeparateThread(
         fileListers,

@@ -29,6 +29,7 @@ class ADGTests extends munit.FunSuite {
   test("Build lots of JARs") {
     val source = File("test_data/download/adg_tests/repo_ea")
 
+    println("In build")
     if (source.isDirectory()) {
 
       val resForBigTent = File("res_for_big_tent")
@@ -45,7 +46,7 @@ class ADGTests extends munit.FunSuite {
       var captured: Vector[File] = Vector()
       val sync = new Object()
       var finished = false
-
+      println("Testing build")
       Builder.buildDB(
         dest = resForBigTent,
         tempDir = None,
@@ -53,7 +54,7 @@ class ADGTests extends munit.FunSuite {
           .flatMap(s => Try { Integer.parseInt(s.trim()) }.toOption)
           .getOrElse(25),
         maxRecords = 50000,
-        fileListers = Vector(() => Helpers.findFiles(source, f => true)),
+        fileListers = Vector(queue => Helpers.findFiles(source, queue)),
         ignorePathSet = Set(),
         excludeFileRegex = Vector(),
         blockList = None,

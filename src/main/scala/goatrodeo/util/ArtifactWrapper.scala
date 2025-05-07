@@ -215,6 +215,19 @@ final case class FileWrapper(
 }
 
 object FileWrapper {
+  def apply(
+      wrappedFile: File,
+      thePath: String,
+      tempDir: Option[File],
+      finishedFunc: File => Unit = (f: File) => ()
+  ): FileWrapper = {
+    new FileWrapper(
+      wrappedFile.getCanonicalFile(),
+      thePath,
+      tempDir,
+      finishedFunc
+    )
+  }
   def fromName(name: String, tempDir: Option[File]): FileWrapper = {
     FileWrapper(new File(name), name, tempDir = tempDir)
   }

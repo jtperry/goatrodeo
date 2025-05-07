@@ -272,8 +272,10 @@ object MavenToProcess {
   val logger: Logger = Logger(getClass())
   def computeMavenFiles(
       byUUID: ToProcess.ByUUID,
-      byName: ToProcess.ByName
+      byName: ToProcess.ByName,
+      eager: Boolean
   ): (Vector[ToProcess], ByUUID, ByName, String) = {
+
     val jars = byName.toVector.filter { case (name, artifacts) =>
       (name.endsWith(".jar") || name.endsWith(".war") || name.endsWith(
         ".war"
@@ -292,23 +294,33 @@ object MavenToProcess {
           val sourcesName = noJarName + "-sources.jar"
 
           val poms = byName.get(pomName).toVector.flatten
-          val javaDocs = byName.get(javaDocName).toVector.flatten
           val sources = byName.get(sourcesName).toVector.flatten
-          val revisedById =
-            Vector(artifacts, poms, sources, javaDocs).flatten.foldLeft(byId) {
-              case (byId, artifact) => byId - artifact.uuid
-            }
-          val revisedToProcess = toProcess :+ MavenToProcess(
-            artifacts.head,
-            poms.headOption,
-            sources.headOption,
-            javaDocs.headOption
-          )
-          (
-            revisedToProcess,
-            revisedById,
-            byName - name - pomName - javaDocName - sourcesName
-          )
+          // unless we're in eager mode, only process the items where the JAR, POM, and Sources are available
+          if (
+            eager || (poms.length == artifacts.length && poms.length == sources.length)
+          ) {
+            val javaDocs = byName.get(javaDocName).toVector.flatten
+
+            val revisedById =
+              Vector(artifacts, poms, sources, javaDocs).flatten.foldLeft(
+                byId
+              ) { case (byId, artifact) =>
+                byId - artifact.uuid
+              }
+            val revisedToProcess = toProcess :+ MavenToProcess(
+              artifacts.head,
+              poms.headOption,
+              sources.headOption,
+              javaDocs.headOption
+            )
+            (
+              revisedToProcess,
+              revisedById,
+              byName - name - pomName - javaDocName - sourcesName
+            )
+          } else {
+            (toProcess, byId, byName)
+          }
       }
 
     (toProcess, revisedByUUID, revisedByName, "Maven")

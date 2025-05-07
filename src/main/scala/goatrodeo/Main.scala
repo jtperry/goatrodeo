@@ -30,6 +30,7 @@ import scala.jdk.CollectionConverters._
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
+import goatrodeo.util.WorkQueue
 
 /** The `main` class
   */
@@ -60,18 +61,21 @@ object Howdy {
       maxRecords: Int = 50000,
       tempDir: Option[File] = None
   ) {
-    def getFileListBuilders(): Vector[() => Seq[File]] = {
-      build.map(file => () => Helpers.findFiles(file, f => true)) ++ fileList
-        .map(f => {
-          val fileNames =
-            Files
-              .readAllLines(f.toPath())
-              .asScala
-              .toSeq
-              .map(fn => new File(fn))
-              .filter(_.exists())
-          () => fileNames
-        })
+    def getFileListBuilders(): Vector[WorkQueue[File] => Unit] = {
+      build.map(file => queue => Helpers.findFiles(file, queue)) ++ fileList
+        .map(f =>
+          queue => {
+            val fileNames =
+              Files
+                .readAllLines(f.toPath())
+                .asScala
+                .toSeq
+                .map(fn => new File(fn))
+                .filter(_.exists())
+                .foreach(queue.addItem(_))
+
+          }
+        )
     }
   }
 
@@ -244,7 +248,7 @@ object Howdy {
                       destFile.toPath(),
                       (success
                         .foldLeft(StringBuilder()) { case (sb, file) =>
-                          sb.append(file.getCanonicalPath())
+                          sb.append(file.getPath())
                           sb.append('\n')
                           sb
                         })

@@ -185,7 +185,8 @@ object DockerToProcess {
   private val logger: Logger = Logger(getClass())
   def computeDockerFiles(
       byUUID: ToProcess.ByUUID,
-      byName: ToProcess.ByName
+      byName: ToProcess.ByName,
+      eager: Boolean
   ): (Vector[ToProcess], ByUUID, ByName, String) = {
 
     val maybeManifest = byName.get("manifest.json")

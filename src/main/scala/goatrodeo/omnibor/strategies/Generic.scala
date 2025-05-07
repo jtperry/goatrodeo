@@ -90,13 +90,16 @@ final case class GenericFile(file: ArtifactWrapper) extends ToProcess {
 object GenericFile {
   def computeGenericFiles(
       byUUID: ToProcess.ByUUID,
-      byName: ToProcess.ByName
+      byName: ToProcess.ByName,
+      eager: Boolean
   ): (Vector[ToProcess], ByUUID, ByName, String) = {
-    val ret = for {
-      vals <- byName.values
-      wrapper <- vals
-    } yield GenericFile(wrapper)
+    if (eager) {
+      val ret = for {
+        vals <- byName.values
+        wrapper <- vals
+      } yield GenericFile(wrapper)
 
-    (ret.toVector, Map(), Map(), "Generic")
+      (ret.toVector, Map(), Map(), "Generic")
+    } else (Vector.empty, byUUID, byName, "Generic")
   }
 }

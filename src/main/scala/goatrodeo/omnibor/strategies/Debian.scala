@@ -200,7 +200,8 @@ object Debian {
 
   def computeDebianFiles(
       byUUID: ToProcess.ByUUID,
-      byName: ToProcess.ByName
+      byName: ToProcess.ByName,
+      eager: Boolean
   ): (Vector[ToProcess], ByUUID, ByName, String) = {
     var ret: Vector[ToProcess] = Vector()
     var retByUUID = byUUID
