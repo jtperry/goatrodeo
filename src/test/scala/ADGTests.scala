@@ -5,6 +5,7 @@ import goatrodeo.util.Helpers
 
 import java.io.File
 import scala.util.Try
+import java.util.concurrent.atomic.AtomicBoolean
 class ADGTests extends munit.FunSuite {
   test("Unreadable JAR") {
     val source = File("test_data/download/adg_tests/repo_ea")
@@ -54,7 +55,7 @@ class ADGTests extends munit.FunSuite {
           .flatMap(s => Try { Integer.parseInt(s.trim()) }.toOption)
           .getOrElse(25),
         maxRecords = 50000,
-        fileListers = Vector(queue => Helpers.findFiles(source, queue)),
+        fileListers = Vector((queue, dead_?) => Helpers.findFiles(source, queue, dead_?)),
         ignorePathSet = Set(),
         excludeFileRegex = Vector(),
         blockList = None,

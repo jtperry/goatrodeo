@@ -435,9 +435,10 @@ object ToProcess {
       tempDir: Option[File],
       onFound: ToProcess => Unit = _ => ()
   ): Vector[ToProcess] = {
+
     val queue = WorkQueue[File]()
     Helpers
-      .findFiles(directory, queue);
+      .findFiles(directory, queue, new AtomicBoolean(false));
     queue.close()
 
     strategiesForArtifacts(
@@ -553,7 +554,7 @@ object ToProcess {
   import goatrodeo.util.WorkQueue
 
   def buildQueueOnSeparateThread(
-      fileListers: Seq[WorkQueue[File] => Unit],
+      fileListers: Seq[(WorkQueue[File], AtomicBoolean) => Unit],
       ignorePathList: Set[String],
       excludeFileRegex: Seq[java.util.regex.Pattern],
       finishedFile: File => Unit,
@@ -576,7 +577,7 @@ object ToProcess {
           val listFileThread = new Thread(() => {
             logger.info("In find file thread")
             for (fl <- fileListers) {
-              fl(fileQueue)
+              fl(fileQueue, dead_?)
             }
             logger.info("Closing file queue")
             fileQueue.close()
@@ -587,7 +588,7 @@ object ToProcess {
           val mimeArtifactThread = new Thread(() => {
             var known: Set[File] = Set()
             var count = 0
-            while (!fileQueue.closed()) {
+            while (!fileQueue.closed() && !dead_?.get()) {
               val batch = fileQueue.getBatch()
               var parentDir: Option[String] = None
               var curBatch: Vector[ArtifactWrapper] = Vector.empty
@@ -612,11 +613,23 @@ object ToProcess {
                 known = known + canonicalized
                 fw.mimeType
                 val parent = canonicalized.getParentFile().getPath()
-                mimedQueue.addItem(fw)
+                if (parentDir.isEmpty || parentDir == Some(parent)) {
+                  parentDir = Some(parent)
+                  curBatch = curBatch :+ fw
+                } else {
+                  curBatch = curBatch :+ fw
+                  mimedQueue.addItems(curBatch)
+                  curBatch = Vector.empty
+                  parentDir = Some(parent)
+                }
 
                 if (count % 10000 == 0) {
                   logger.info(f"Mimed file count ${count}")
                 }
+              }
+
+              if (!curBatch.isEmpty) {
+                mimedQueue.addItems(curBatch)
               }
             }
 

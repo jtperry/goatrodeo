@@ -46,6 +46,7 @@ import scala.collection.immutable.TreeMap
 import scala.collection.immutable.TreeSet
 import scala.jdk.CollectionConverters.SetHasAsScala
 import scala.util.Try
+import java.util.concurrent.atomic.AtomicBoolean
 
 type GitOID = String
 
@@ -58,25 +59,27 @@ object Helpers {
   def treeInfoFromManifest(
       manifestString: String
   ): TreeMap[String, TreeSet[StringOrPair]] = {
-    val bis = ByteArrayInputStream(manifestString.getBytes("UTF-8"))
-    val manifest = java.util.jar.Manifest.apply(bis)
+    Try {
+      val bis = ByteArrayInputStream(manifestString.getBytes("UTF-8"))
+      val manifest = java.util.jar.Manifest.apply(bis)
 
-    val mapping = for {
-      entry <- manifest.getMainAttributes().entrySet().asScala.toVector
+      val mapping = for {
+        entry <- manifest.getMainAttributes().entrySet().asScala.toVector
 
-    } yield {
-      entry.getKey.toString.toLowerCase -> TreeSet(
-        StringOrPair(entry.getValue().toString)
+      } yield {
+        entry.getKey.toString.toLowerCase -> TreeSet(
+          StringOrPair(entry.getValue().toString)
+        )
+      }
+
+      val ret = TreeMap(
+        (mapping :+ "manifest" -> TreeSet(
+          StringOrPair("text/maven-manifest", manifestString)
+        ))*
       )
-    }
 
-    val ret = TreeMap(
-      (mapping :+ "manifest" -> TreeSet(
-        StringOrPair("text/maven-manifest", manifestString)
-      ))*
-    )
-
-    ret
+      ret
+    }.toOption.getOrElse(TreeMap.empty)
   }
 
   /** Merge TreeMaps together
@@ -243,13 +246,16 @@ object Helpers {
     */
   def findFiles(
       root: File,
-      queue: WorkQueue[File]
+      queue: WorkQueue[File],
+      dead_? : AtomicBoolean
   ): Unit = {
-
+    if (dead_?.get()) {
+      return
+    }
     if (root.isDirectory()) {
       Option(root.listFiles()).toVector
         .flatMap(_.toVector)
-        .foreach(findFiles(_, queue))
+        .foreach(findFiles(_, queue, dead_?))
     } else if (root.isFile() && !root.getName().startsWith(".")) {
       queue.addItem(root)
     }

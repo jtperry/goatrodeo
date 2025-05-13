@@ -70,7 +70,7 @@ object Builder {
       blockList: Option[File],
       maxRecords: Int,
       tempDir: Option[File],
-      fileListers: Seq[WorkQueue[File] => Unit],
+      fileListers: Seq[(WorkQueue[File], AtomicBoolean) => Unit],
       ignorePathSet: Set[String],
       excludeFileRegex: Seq[java.util.regex.Pattern],
       finishedFile: File => Unit,

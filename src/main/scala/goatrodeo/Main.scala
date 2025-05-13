@@ -31,6 +31,7 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 import goatrodeo.util.WorkQueue
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** The `main` class
   */
@@ -61,17 +62,17 @@ object Howdy {
       maxRecords: Int = 50000,
       tempDir: Option[File] = None
   ) {
-    def getFileListBuilders(): Vector[WorkQueue[File] => Unit] = {
-      build.map(file => queue => Helpers.findFiles(file, queue)) ++ fileList
+    def getFileListBuilders(): Vector[(WorkQueue[File], AtomicBoolean) => Unit] = {
+      build.map(file => (queue, dead_?) => Helpers.findFiles(file, queue, dead_?)) ++ fileList
         .map(f =>
-          queue => {
+        (queue, dead_?) => {
             val fileNames =
               Files
                 .readAllLines(f.toPath())
                 .asScala
                 .toSeq
                 .map(fn => new File(fn))
-                .filter(_.exists())
+                .filter(_.exists() && !dead_?.get())
                 .foreach(queue.addItem(_))
 
           }
