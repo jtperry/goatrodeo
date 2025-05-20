@@ -17,6 +17,7 @@ package goatrodeo.omnibor
 import com.typesafe.scalalogging.Logger
 import goatrodeo.util.GitOIDUtils
 import goatrodeo.util.Helpers
+import goatrodeo.util.WorkQueue
 
 import java.io.BufferedWriter
 import java.io.File
@@ -32,7 +33,6 @@ import scala.annotation.tailrec
 import scala.collection.immutable.TreeSet
 import scala.collection.parallel.CollectionConverters.VectorIsParallelizable
 import scala.util.Try
-import goatrodeo.util.WorkQueue
 
 /** Build the GitOIDs the container and all the sub-elements found in the
   * container
@@ -142,28 +142,35 @@ object Builder {
 
     val writeThreadCnt = AtomicInteger(0)
     while (!dead_?.get() && (stillWorking.get() || !queue.isEmpty())) {
-      val thread = processMaxRecords(
-        updatedDest,
-        threadCnt = threadCnt,
-        maxRecords = maxRecords,
-        queue = queue,
-        stillWorking = stillWorking,
-        blockGitoids = blockGitoids,
-        cnt = cnt,
-        runningCnt = runningCnt,
-        totalStart = totalStart,
-        dead_? = dead_?,
-        loopStart = loopStart,
-        writeThreadCnt = writeThreadCnt,
-        tempDir = tempDir
-      )
+      // only allow two write threads
+      while (!dead_?.get() && writeThreadCnt.get() > 1) {
+        Thread.sleep(250)
+      }
 
-      loopCnt += 1
-      logger.info(
-        f"Finished multi-thread consumer loop ${loopCnt} at ${Duration
-            .between(totalStart, Instant.now())}"
-      )
-      updatedDest = destWithCount(dest, loopCnt)
+      if (!dead_?.get()) {
+        val thread = processMaxRecords(
+          updatedDest,
+          threadCnt = threadCnt,
+          maxRecords = maxRecords,
+          queue = queue,
+          stillWorking = stillWorking,
+          blockGitoids = blockGitoids,
+          cnt = cnt,
+          runningCnt = runningCnt,
+          totalStart = totalStart,
+          dead_? = dead_?,
+          loopStart = loopStart,
+          writeThreadCnt = writeThreadCnt,
+          tempDir = tempDir
+        )
+
+        loopCnt += 1
+        logger.info(
+          f"Finished multi-thread consumer loop ${loopCnt} at ${Duration
+              .between(totalStart, Instant.now())}"
+        )
+        updatedDest = destWithCount(dest, loopCnt)
+      }
     }
 
     logger.info("Waiting for write threads")
@@ -231,6 +238,8 @@ object Builder {
           var toProcess: ToProcess = null
           while (
             (cnt.get() - startedRunning) < maxRecords // only run so many items
+            &&
+            storage.size() < 75000000 // max of 75M gitoids
             &&
             !dead_?.get() && {
               toProcess = doPoll();

@@ -17,6 +17,7 @@ package goatrodeo
 import com.typesafe.scalalogging.Logger
 import goatrodeo.omnibor.Builder
 import goatrodeo.util.Helpers
+import goatrodeo.util.WorkQueue
 import org.apache.commons.io.filefilter.WildcardFileFilter
 import scopt.OParser
 import scopt.OParserBuilder
@@ -25,13 +26,12 @@ import java.io.File
 import java.io.FileFilter
 import java.nio.file.Files
 import java.nio.file.StandardOpenOption
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.regex.Pattern
 import scala.jdk.CollectionConverters._
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-import goatrodeo.util.WorkQueue
-import java.util.concurrent.atomic.AtomicBoolean
 
 /** The `main` class
   */
@@ -62,10 +62,13 @@ object Howdy {
       maxRecords: Int = 50000,
       tempDir: Option[File] = None
   ) {
-    def getFileListBuilders(): Vector[(WorkQueue[File], AtomicBoolean) => Unit] = {
-      build.map(file => (queue, dead_?) => Helpers.findFiles(file, queue, dead_?)) ++ fileList
+    def getFileListBuilders()
+        : Vector[(WorkQueue[File], AtomicBoolean) => Unit] = {
+      build.map(file =>
+        (queue, dead_?) => Helpers.findFiles(file, queue, dead_?)
+      ) ++ fileList
         .map(f =>
-        (queue, dead_?) => {
+          (queue, dead_?) => {
             val fileNames =
               Files
                 .readAllLines(f.toPath())

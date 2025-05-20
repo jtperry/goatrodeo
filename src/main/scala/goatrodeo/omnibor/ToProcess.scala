@@ -7,6 +7,8 @@ import goatrodeo.util.ArtifactWrapper
 import goatrodeo.util.FileWalker
 import goatrodeo.util.FileWrapper
 import goatrodeo.util.GitOID
+import goatrodeo.util.Helpers
+import goatrodeo.util.WorkQueue
 
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -14,8 +16,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.immutable.TreeMap
 import scala.collection.immutable.TreeSet
-import goatrodeo.util.WorkQueue
-import goatrodeo.util.Helpers
 
 /** When processing Artifacts, knowing the Artifact type for a sequence of
   * artifacts can be helpful. For example (Java POM File, Java Sources,
