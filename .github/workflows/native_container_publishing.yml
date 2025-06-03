@@ -2,7 +2,7 @@ name: Publish Native Container Images
 
 on:
   workflow_dispatch
-  
+
 env:
   GHCR_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -80,12 +80,10 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: |
-            ${{ env.DOCKERHUB_NAMESPACE }}/${{ github.event.repository.name }}  
           # JT makes working on just getting tabs working so put in above when below used to be real
-          # images: |
-          #    ${{ env.DOCKERHUB_NAMESPACE }}/${{ github.event.repository.name }}  
-          #    ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: |
+             ${{ env.DOCKERHUB_NAMESPACE }}/${{ github.event.repository.name }}  
+             ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
             
           tags: |
             type=sha
