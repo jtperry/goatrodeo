@@ -1,8 +1,8 @@
 name: Publish Native Container Images
 
 on:
-  workflow_dispatch:
-    tags: [ 'v*.*.*' ]
+  workflow_dispatch
+  
 env:
   GHCR_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -81,15 +81,16 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            type=schedule,pattern={{date 'YYYYMMDD-hhmmss' tz='America/Los_Angeles'}},enable=${{ github.ref_name != 'main' }}
-            type=raw,value=latest
+            ${{ env.DOCKERHUB_NAMESPACE }}/${{ github.event.repository.name }}  
           # JT makes working on just getting tabs working so put in above when below used to be real
           # images: |
           #    ${{ env.DOCKERHUB_NAMESPACE }}/${{ github.event.repository.name }}  
           #    ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
             
           tags: |
-            type=semver,pattern={{version}}
+            type=sha
+        env:
+          DOCKER_METADATA_SHORT_SHA_LENGTH: 12
       
       - name: Stage Docker Build Environment from SBT
         run: |
