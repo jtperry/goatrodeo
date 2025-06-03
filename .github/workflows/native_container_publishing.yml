@@ -11,7 +11,7 @@ jobs:
   push_to_registry:
     strategy:
          #fail everything if one fails. This will catch the tests and stop windows if any tests fail
-        fail-fast: true
+        fail-fast: false
         matrix:
           os:
               - ubuntu-latest
