@@ -81,8 +81,12 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-             ${{ env.DOCKERHUB_NAMESPACE }}/${{ github.event.repository.name }}  
-             ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
+            type=schedule,pattern={{date 'YYYYMMDD-hhmmss' tz='America/Los_Angeles'}},enable=${{ github.ref_name != 'main' }}
+            type=raw,value=latest
+          # JT makes working on just getting tabs working so put in above when below used to be real
+          # images: |
+          #    ${{ env.DOCKERHUB_NAMESPACE }}/${{ github.event.repository.name }}  
+          #    ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
             
           tags: |
             type=semver,pattern={{version}}
