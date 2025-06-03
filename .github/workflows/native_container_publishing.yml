@@ -83,7 +83,7 @@ jobs:
           # JT makes working on just getting tabs working so put in above when below used to be real
           images: |
              ${{ env.DOCKERHUB_NAMESPACE }}/${{ github.event.repository.name }}  
-             ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
+         #    ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
             
           tags: |
             type=sha
