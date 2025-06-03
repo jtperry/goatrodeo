@@ -1,7 +1,8 @@
 name: Publish Native Container Images
 
 on:
-  workflow_dispatch
+  workflow_dispatch:
+    tags: [ 'v*.*.*' ]
 env:
   GHCR_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
