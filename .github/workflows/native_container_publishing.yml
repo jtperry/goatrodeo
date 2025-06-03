@@ -87,6 +87,8 @@ jobs:
             
           tags: |
             type=sha
+          flavor:
+            auto=true
         env:
           DOCKER_METADATA_SHORT_SHA_LENGTH: 12
       
