@@ -7,7 +7,7 @@ env:
   GHCR_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
   DOCKERHUB_NAMESPACE: ${{ secrets.DOCKERHUB_USER }}
-  PLATFORMS: linux/amd64, linux/arm64, windows/amd64
+  PLATFORMS: linux/amd64, linux/arm64
 
 jobs:
   push_to_registry:

@@ -176,7 +176,6 @@ enablePlugins(DockerPlugin)
 Docker / packageName := projectName
 Docker / maintainer := "ext-engineering@spicelabs.io"
 
-// dockerBaseImage := "eclipse-temurin:21-jre-ubi9-minimal"
-dockerBaseImage := "eclipse-temurin:21"
+dockerBaseImage := "eclipse-temurin:21-jre-ubi9-minimal"
 dockerLabels := Map.empty
 dockerExposedPorts := Seq.empty
