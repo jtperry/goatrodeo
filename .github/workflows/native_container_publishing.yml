@@ -71,12 +71,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
-      # - name: Log in to Github Container Registry
-      #   uses: docker/login-action@v3
-      #   with:
-      #     registry: ${{ env.GHCR_REGISTRY }}
-      #     username: ${{ github.actor }}
-      #     password: ${{ secrets.GH_TOKEN }}
+      - name: Log in to Github Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_TOKEN }}
       
       - name: Extract Metadata (tags, labels) for Docker
         id: meta
@@ -85,7 +85,7 @@ jobs:
           # JT makes working on just getting tabs working so put in above when below used to be real
           images: |
              ${{ env.DOCKERHUB_NAMESPACE }}/${{ github.event.repository.name }}  
-         #    ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
+             ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
             
           tags: |
             type=sha
@@ -110,9 +110,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
       
-      # - name: Generate Artifact Attestation
-      #   uses: actions/attest-build-provenance@v1
-      #   with:
-      #     subject-name: ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
-      #     subject-digest: ${{ steps.push.outputs.digest }}
-      #     push-to-registry: true
+      - name: Generate Artifact Attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
